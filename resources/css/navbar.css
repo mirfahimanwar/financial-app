@@ -1,0 +1,114 @@
+/* Navbar.css */
+
+.nav {
+    display: flex;
+    align-items: center;
+    background: #222;
+    padding: 0 2rem;
+    height: 60px;
+    color: #fff;
+    justify-content: space-between;
+}
+
+.logo {
+    font-weight: bold;
+    font-size: 1.5rem;
+}
+
+.navLinks {
+    list-style: none;
+    display: flex;
+    gap: 2rem;
+    margin: 0;
+    padding: 0;
+    align-items: center;
+}
+
+.link {
+    color: #fff;
+    text-decoration: none;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.dropdown {
+    position: relative;
+}
+
+.dropdownMenu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #333;
+    min-width: 150px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    border-radius: 4px;
+    z-index: 1000;
+    margin-top: 8px;
+    list-style: none;
+    padding: 0;
+}
+
+.dropdownLink {
+    display: block;
+    color: #fff;
+    text-decoration: none;
+    padding: 10px 16px;
+    border-radius: 4px;
+    transition: background 0.2s;
+}
+
+.mobileMenuIcon {
+    display: none; /* Hidden by default on desktop */
+    font-size: 1.5rem;
+    cursor: pointer;
+}
+
+/* Media query for mobile devices */
+@media screen and (max-width: 768px) {
+    .navLinks {
+        display: none; /* Hidden on mobile unless 'active' */
+        flex-direction: column;
+        position: absolute;
+        top: 60px; /* Position below the navbar */
+        left: 0;
+        width: 100%;
+        background: #333;
+        text-align: center;
+        padding: 1rem 0;
+        gap: 0;
+        z-index: 999;
+    }
+
+    .navLinks.active {
+        display: flex; /* Show the menu when the active class is applied */
+    }
+
+    .navLinks li {
+        width: 100%;
+    }
+    
+    .navLinks a,
+    .navLinks span {
+        display: block;
+        padding: 1rem;
+    }
+
+    .mobileMenuIcon {
+        display: block; /* Show the hamburger icon on mobile */
+    }
+
+    .dropdownMenu {
+        position: relative;
+        width: 100%;
+        background: #444;
+        box-shadow: none;
+        margin-top: 0;
+    }
+
+    .dropdownLink {
+        padding-left: 3rem; /* Indent dropdown links on mobile */
+    }
+}
