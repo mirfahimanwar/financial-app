@@ -12,6 +12,7 @@ class FinancialController extends Controller
     {
         return Inertia::render('mortgage-calculator');
     }
+
     public function calculateMortgage(Request $request)
     {
         $data = $request->only([
@@ -104,6 +105,22 @@ class FinancialController extends Controller
         if ($startDateObj) {
             $monthsElapsed = ($startDateObj < $today) ? (($today->format('Y') - $startDateObj->format('Y')) * 12 + ($today->format('n') - $startDateObj->format('n'))) : 0;
         }
+
+        // Track all payment components for accurate totals
+        $totalInterestWithExtra = 0;
+        $totalPrincipalWithExtra = 0;
+        $totalPropertyTaxWithExtra = 0;
+        $totalHomeInsuranceWithExtra = 0;
+        $totalHOAWithExtra = 0;
+        $totalPMIPaidWithExtra = 0;
+        $monthsWithPMI = 0;
+        $pmiPaid = 0;
+        $totalPaymentsWithExtra = 0;
+        $month = 0;
+        $extraApplied = false;
+        $remainingPrincipal = $principal;
+        $currentEquity = $downPayment;
+        $pmiActive = $pmi > 0;
         while ($remainingPrincipal > 0.01 && $month < 1000) {
             $interest = $remainingPrincipal * $monthlyInterestRate;
             $principalPaid = $monthlyPayment - $interest;
@@ -128,26 +145,28 @@ class FinancialController extends Controller
             if ($month < $monthsElapsed) {
                 $totalInterestPaidSoFar += $interest;
             }
-            // PMI logic: Only pay PMI if equity is below 20% at the START of the month
+            $totalPrincipalWithExtra += $principalPaid;
+            $totalPropertyTaxWithExtra += $propertyTax;
+            $totalHomeInsuranceWithExtra += $homeInsurance;
+            $totalHOAWithExtra += $hoa;
             if ($pmiActive && $currentEquity < $targetEquity) {
                 $monthsWithPMI++;
                 $pmiPaid += $pmi;
+                $totalPMIPaidWithExtra += $pmi;
             }
             if ($pmiActive && $currentEquity >= $targetEquity) {
                 $pmiActive = false;
             }
-            $schedule[] = [
-                'month' => $month + 1,
-                'principal' => $remainingPrincipal,
-            ];
+            $totalPaymentsWithExtra += $interest + $principalPaid + $propertyTax + $homeInsurance + $hoa;
+            if ($pmiActive || ($currentEquity < $targetEquity)) {
+                $totalPaymentsWithExtra += $pmi;
+            }
             $month++;
         }
-
-        $totalMonthsWithExtra = $month;
-        $totalPaymentsWithExtra = ($monthlyPayment + $propertyTax + $homeInsurance + $hoa) * $totalMonthsWithExtra + $pmi * $monthsWithPMI + $downPayment;
-        $totalPMIPaidWithExtra = $pmiPaid;
-        $interestSaved = ($monthlyPayment * $numPayments - $principal) - $totalInterestWithExtra;
-        $yearsLeft = $totalMonthsWithExtra / 12;
+    $totalMonthsWithExtra = $month;
+    $interestSaved = ($monthlyPayment * $numPayments - $principal) - $totalInterestWithExtra;
+    // Now set totalPaymentsWithExtra as requested (moved after $totalPayments is defined)
+    $yearsLeft = $totalMonthsWithExtra / 12;
 
         // Add taxes, insurance, PMI, HOA
         $propertyTax = (float)($data['propertyTax'] ?? 0) / 12;
@@ -185,7 +204,10 @@ class FinancialController extends Controller
             }
         }
         $totalPMIPaidOrig = $pmi * $monthsWithPMIOrig;
-        $totalPayments = ($monthlyPayment + $propertyTax + $homeInsurance + $hoa) * $numPayments + $totalPMIPaidOrig + $downPayment;
+
+    $totalPayments = ($monthlyPayment + $propertyTax + $homeInsurance + $hoa) * $numPayments + $totalPMIPaidOrig + $downPayment;
+    // Now set totalPaymentsWithExtra as requested
+    $totalPaymentsWithExtra = $totalPayments - $interestSaved;
 
         // Calculate total interest paid
         $totalPaid = $monthlyPayment * $numPayments;
