@@ -15,6 +15,7 @@ class FinancialController extends Controller
 
     public function calculateMortgage(Request $request)
     {
+        // Ge
         $data = $request->only([
             'homeValue', 'downPayment', 'loanAmount', 'interestRate', 'loanTerm',
             'startDate', 'propertyTax', 'pmi', 'homeInsurance', 'hoa',
@@ -38,18 +39,63 @@ class FinancialController extends Controller
             $monthlyPayment = $principal * ($monthlyInterestRate * pow(1 + $monthlyInterestRate, $numPayments)) / (pow(1 + $monthlyInterestRate, $numPayments) - 1);
         }
 
-        // Refinance calculation (if requested)
-        $refinanceTotals = null;
-        if (!empty($data['refinanceInterestRate']) && !empty($data['refinanceStartMonth'])) {
+    // Always define these before refinance block so they're available
+    $propertyTax = (float)($data['propertyTax'] ?? 0);
+    $homeInsurance = (float)($data['homeInsurance'] ?? 0);
+    $pmi = (float)($data['pmi'] ?? 0);
+
+    // Calculate original total interest (before refinance)
+    $monthlyPropertyTax = $propertyTax / 12;
+    $monthlyHomeInsurance = $homeInsurance / 12;
+    $monthlyPMI = $pmi;
+    $remainingPrincipalOrig = $principal;
+    $totalInterest = 0;
+    $interestPaidBeforeRefi = 0;
+    $pmiPaidBeforeRefi = 0;
+    $remainingPrincipalAtRefi = $principal;
+    $pmiActiveBeforeRefi = $pmi > 0;
+    $currentEquityBeforeRefi = (float)($data['downPayment'] ?? 0);
+    $homeValueBeforeRefi = (float)($data['homeValue'] ?? 0);
+    $targetEquityBeforeRefi = 0.20 * $homeValueBeforeRefi;
+    for ($i = 0; $i < $numPayments; $i++) {
+        $interest = $remainingPrincipalAtRefi * $monthlyInterestRate;
+        $principalPaid = $monthlyPayment - $interest;
+        if ($principalPaid > $remainingPrincipalAtRefi) {
+            $principalPaid = $remainingPrincipalAtRefi;
+        }
+        $remainingPrincipalAtRefi -= $principalPaid;
+        $currentEquityBeforeRefi = $homeValueBeforeRefi - $remainingPrincipalAtRefi;
+            if ($i < (isset($data['refinanceStartMonth']) ? (int)$data['refinanceStartMonth'] : 0)) {
+                $interestPaidBeforeRefi += $interest;
+                if ($pmiActiveBeforeRefi && $currentEquityBeforeRefi < $targetEquityBeforeRefi) {
+                    $pmiPaidBeforeRefi += $pmi;
+                }
+                $currentEquityBeforeRefi += $principalPaid;
+                if ($pmiActiveBeforeRefi && $currentEquityBeforeRefi >= $targetEquityBeforeRefi) {
+                    $pmiActiveBeforeRefi = false;
+                }
+            }
+        $totalInterest += $interest;
+        if ($remainingPrincipalAtRefi <= 0.01) break;
+    }
+
+    // Refinance calculation (if requested)
+    $refinanceTotals = null;
+    if (!empty($data['refinanceInterestRate']) && !empty($data['refinanceStartMonth'])) {
             $refiRate = (float)$data['refinanceInterestRate'];
             $refiStartMonth = (int)$data['refinanceStartMonth'];
-            // Calculate remaining principal after refiStartMonth
+            // Calculate remaining principal and interest paid before refinance
             $refiPrincipal = $principal;
             $refiMonthly = $monthlyPayment;
+            $interestPaidBeforeRefinance = 0;
             for ($i = 0; $i < $refiStartMonth; $i++) {
                 $interest = $refiPrincipal * $monthlyInterestRate;
                 $principalPaid = $refiMonthly - $interest;
+                if ($principalPaid > $refiPrincipal) {
+                    $principalPaid = $refiPrincipal;
+                }
                 $refiPrincipal -= $principalPaid;
+                $interestPaidBeforeRefinance += $interest;
             }
             // Now calculate new payment with new rate/term (use original term minus months paid)
             $refiTermMonths = $numPayments - $refiStartMonth;
@@ -58,21 +104,77 @@ class FinancialController extends Controller
             if ($refiPrincipal > 0 && $refiMonthlyRate > 0 && $refiTermMonths > 0) {
                 $refiMonthlyPayment = $refiPrincipal * ($refiMonthlyRate * pow(1 + $refiMonthlyRate, $refiTermMonths)) / (pow(1 + $refiMonthlyRate, $refiTermMonths) - 1);
             }
+            $downPayment = (float)($data['downPayment'] ?? 0);
+
             $refiTotalInterest = 0;
+            $refiTotalPrincipal = 0;
+            $refiTotalPropertyTax = 0;
+            $refiTotalHomeInsurance = 0;
+            $refiTotalPMI = 0;
             $refiRemaining = $refiPrincipal;
+            $refiCurrentEquity = $downPayment;
+            $refiPMI = (float)($data['pmi'] ?? 0);
+            $refiPropertyTax = (float)($data['propertyTax'] ?? 0) / 12;
+            $refiHomeInsurance = (float)($data['homeInsurance'] ?? 0) / 12;
+            $refiHOA = (float)($data['hoa'] ?? 0);
+            $refiHomeValue = (float)($data['homeValue'] ?? 0);
+            $refiTargetEquity = 0.20 * $refiHomeValue;
+            $refiPMIPaid = 0;
+            $refiMonthsWithPMI = 0;
+            $refiPMIActive = $refiPMI > 0;
             for ($i = 0; $i < $refiTermMonths; $i++) {
                 $interest = $refiRemaining * $refiMonthlyRate;
                 $principalPaid = $refiMonthlyPayment - $interest;
+                if ($principalPaid > $refiRemaining) {
+                    $principalPaid = $refiRemaining;
+                }
                 $refiRemaining -= $principalPaid;
+                $refiCurrentEquity = $refiHomeValue - $refiRemaining;
                 $refiTotalInterest += $interest;
+                $refiTotalPrincipal += $principalPaid;
+                $refiTotalPropertyTax += $refiPropertyTax;
+                $refiTotalHomeInsurance += $refiHomeInsurance;
+                if ($refiPMIActive && $refiCurrentEquity < $refiTargetEquity) {
+                    $refiMonthsWithPMI++;
+                    $refiPMIPaid += $refiPMI;
+                    $refiTotalPMI += $refiPMI;
+                }
+                if ($refiPMIActive && $refiCurrentEquity >= $refiTargetEquity) {
+                    $refiPMIActive = false;
+                }
                 if ($refiRemaining <= 0.01) break;
             }
-            $downPayment = (float)($data['downPayment'] ?? 0);
+            $totalInterestPaidRefinance = $interestPaidBeforeRefinance + $refiTotalInterest;
+            $totalPMIPaidRefinance = $pmiPaidBeforeRefi + $refiTotalPMI;
+            $refiTotalPayments = $totalInterestPaidRefinance + $refiTotalPrincipal + $refiTotalPropertyTax + $refiTotalHomeInsurance + $totalPMIPaidRefinance + $downPayment;
+            // Calculate interest for remaining term at original rate
+            $interestRemainingOrig = 0;
+            $remainingPrincipalForOrig = $refiPrincipal;
+            $origMonthlyPayment = $remainingPrincipalForOrig * ($monthlyInterestRate * pow(1 + $monthlyInterestRate, $refiTermMonths)) / (pow(1 + $monthlyInterestRate, $refiTermMonths) - 1);
+            for ($i = 0; $i < $refiTermMonths; $i++) {
+                $interest = $remainingPrincipalForOrig * $monthlyInterestRate;
+                $principalPaid = $origMonthlyPayment - $interest;
+                if ($principalPaid > $remainingPrincipalForOrig) {
+                    $principalPaid = $remainingPrincipalForOrig;
+                }
+                $remainingPrincipalForOrig -= $principalPaid;
+                $interestRemainingOrig += $interest;
+                if ($remainingPrincipalForOrig <= 0.01) break;
+            }
+            // Interest saved is the difference between original and refi interest for the remaining term
+            $interestSavedRefinance = $interestRemainingOrig - $refiTotalInterest;
             $refinanceTotals = [
-                'principal' => $truncate2($refiPrincipal),
-                'interest' => $truncate2($refiTotalInterest),
+                // Total interest and PMI paid should include pre-refi and post-refi
+                'totalPayments' => $truncate2($principal + $interestPaidBeforeRefinance + $refiTotalInterest + ($propertyTax * $years) + ($homeInsurance * $years) + ($pmiPaidBeforeRefi + $refiTotalPMI) + $downPayment),
+                'interest' => $truncate2($interestPaidBeforeRefinance + $refiTotalInterest),
+                'interestPaidBeforeRefinance' => $truncate2($interestPaidBeforeRefinance),
+                'interestPaidAfterRefinance' => $truncate2($refiTotalInterest),
+                'principal' => $truncate2($principal),
+                'propertyTax' => $truncate2($propertyTax * $years),
+                'insurance' => $truncate2($homeInsurance * $years),
+                'pmi' => $truncate2($pmiPaidBeforeRefi + $refiTotalPMI),
                 'downPayment' => $truncate2($downPayment),
-                'total' => $truncate2($refiPrincipal + $refiTotalInterest + $downPayment),
+                'interestSavedRefinance' => $interestSavedRefinance !== null ? $truncate2($interestSavedRefinance) : $truncate2(0),
             ];
         }
 
@@ -122,8 +224,6 @@ class FinancialController extends Controller
         $currentEquity = $downPayment;
         $pmiActive = $pmi > 0;
         while ($remainingPrincipal > 0.01 && $month < 1000) {
-            $interest = $remainingPrincipal * $monthlyInterestRate;
-            $principalPaid = $monthlyPayment - $interest;
             $extra = 0;
             if ($extraType && $extraAmount > 0 && $month >= $extraStartMonth) {
                 if ($extraType === 'one-time' && !$extraApplied) {
@@ -135,9 +235,16 @@ class FinancialController extends Controller
                     $extra = $extraAmount;
                 }
             }
-            $principalPaid += $extra;
-            if ($principalPaid > $remainingPrincipal) {
+            // If extra payment pays off the full balance immediately, no interest should be accrued
+            if ($extra > 0 && $extra >= $remainingPrincipal) {
                 $principalPaid = $remainingPrincipal;
+                $interest = 0;
+            } else {
+                $interest = $remainingPrincipal * $monthlyInterestRate;
+                $principalPaid = $monthlyPayment - $interest + $extra;
+                if ($principalPaid > $remainingPrincipal) {
+                    $principalPaid = $remainingPrincipal;
+                }
             }
             $remainingPrincipal -= $principalPaid;
             $currentEquity = $homeValue - $remainingPrincipal;

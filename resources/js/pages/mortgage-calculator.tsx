@@ -41,13 +41,26 @@ function MortgageCalculatorPage() {
     totalHomeInsurance?: string,
     totalPayments?: string,
     totalPaymentsWithExtra?: string,
+    totalPMIPaidOrig?: string,
     totalPMIPaidWithExtra?: string,
     interestSaved?: string,
     newLoanTermMonths?: number,
     newLoanTermYears?: string,
     projectedPayoffDate?: string,
     totalInterestPaidSoFar?: string,
-    refinanceSavings?: string
+    refinanceSavings?: string,
+    refinanceTotals?: {
+      totalPayments?: string,
+      interest?: string,
+      interestPaidBeforeRefinance?: string,
+      interestPaidAfterRefinance?: string,
+      principal?: string,
+      propertyTax?: string,
+      insurance?: string,
+      pmi?: string,
+      downPayment?: string,
+      interestSavedRefinance?: string,
+    }
   } | null>(() => {
     const cached = localStorage.getItem('mortgageResult');
     return cached ? JSON.parse(cached) : null;
@@ -168,6 +181,7 @@ function MortgageCalculatorPage() {
           newLoanTermYears: data.newLoanTermYears,
           projectedPayoffDate: data.projectedPayoffDate,
           totalInterestPaidSoFar: data.totalInterestPaidSoFar,
+          refinanceTotals: data.refinanceTotals,
         });
       }
     } finally {
@@ -411,7 +425,13 @@ function MortgageCalculatorPage() {
             <li><strong>Total Principal Paid:</strong> {form.loanAmount !== undefined && form.loanAmount !== null && form.loanAmount !== '' && !isNaN(Number(form.loanAmount)) ? `$${Number(form.loanAmount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
             <li><strong>Total Property Tax:</strong> {result.totalPropertyTax !== undefined && result.totalPropertyTax !== null && result.totalPropertyTax !== '' ? `$${Number(result.totalPropertyTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
             <li><strong>Total Insurance:</strong> {result.totalHomeInsurance !== undefined && result.totalHomeInsurance !== null && result.totalHomeInsurance !== '' ? `$${Number(result.totalHomeInsurance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
-            <li><strong>Total PMI Paid:</strong> {result.totalPMIPaidWithExtra !== undefined && result.totalPMIPaidWithExtra !== null && result.totalPMIPaidWithExtra !== '' ? `$${Number(result.totalPMIPaidWithExtra).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
+            <li><strong>Total PMI Paid:</strong> {
+              (result.totalPMIPaidWithExtra !== undefined && result.totalPMIPaidWithExtra !== null && result.totalPMIPaidWithExtra !== '' && result.totalPaymentsWithExtra !== undefined && result.totalPaymentsWithExtra !== null && result.totalPaymentsWithExtra !== '')
+                ? `$${Number(result.totalPMIPaidWithExtra).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                : (result.totalPMIPaidOrig !== undefined && result.totalPMIPaidOrig !== null && result.totalPMIPaidOrig !== ''
+                  ? `$${Number(result.totalPMIPaidOrig).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : 'N/A')
+            }</li>
             <li><strong>Down Payment:</strong> {form.downPayment !== undefined && form.downPayment !== null && form.downPayment !== '' && !isNaN(Number(form.downPayment)) ? `$${Number(form.downPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
           </ul>
           {result.totalPaymentsWithExtra && (
@@ -430,6 +450,25 @@ function MortgageCalculatorPage() {
               <p><strong>Projected Payoff Date:</strong> {result.projectedPayoffDate ? result.projectedPayoffDate : 'N/A'}</p>
               <p><strong>Total Interest Paid So Far:</strong> {result.totalInterestPaidSoFar !== undefined && result.totalInterestPaidSoFar !== null && result.totalInterestPaidSoFar !== '' ? `$${Number(result.totalInterestPaidSoFar).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</p>
             </>
+          )}
+
+          {/* Refinance Summary Section */}
+          {result.refinanceTotals && (
+            <div style={{ marginTop: '2rem', borderTop: '2px solid #bbb', paddingTop: '1rem', background: '#f3f7fa', borderRadius: 8 }}>
+              <h4 style={{ color: '#1a4d7a', marginBottom: 12 }}>Refinance Summary</h4>
+              <p><strong>Total of All Payments (Refinanced):</strong> {result.refinanceTotals.totalPayments ? `$${Number(result.refinanceTotals.totalPayments).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</p>
+              <ul style={{ margin: '0 0 1rem 0', padding: '0 0 0 1.5rem' }}>
+                <li><strong>Total Interest Paid:</strong> {result.refinanceTotals.interest ? `$${Number(result.refinanceTotals.interest).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
+                <li style={{marginLeft:'1em'}}><span style={{color:'#1a4d7a'}}>Interest Paid Before Refinance:</span> {result.refinanceTotals.interestPaidBeforeRefinance ? `$${Number(result.refinanceTotals.interestPaidBeforeRefinance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
+                <li style={{marginLeft:'1em'}}><span style={{color:'#1a4d7a'}}>Interest Paid After Refinance:</span> {result.refinanceTotals.interestPaidAfterRefinance ? `$${Number(result.refinanceTotals.interestPaidAfterRefinance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
+                <li><strong>Total Principal Paid:</strong> {result.refinanceTotals.principal ? `$${Number(result.refinanceTotals.principal).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
+                <li><strong>Total Property Tax:</strong> {result.refinanceTotals.propertyTax ? `$${Number(result.refinanceTotals.propertyTax).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
+                <li><strong>Total Insurance:</strong> {result.refinanceTotals.insurance ? `$${Number(result.refinanceTotals.insurance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
+                <li><strong>Total PMI Paid:</strong> {result.refinanceTotals.pmi ? `$${Number(result.refinanceTotals.pmi).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
+                <li><strong>Down Payment:</strong> {result.refinanceTotals.downPayment ? `$${Number(result.refinanceTotals.downPayment).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
+                <li><strong>Interest Saved:</strong> {result.refinanceTotals.interestSavedRefinance !== undefined && result.refinanceTotals.interestSavedRefinance !== null && result.refinanceTotals.interestSavedRefinance !== '' ? `$${Number(result.refinanceTotals.interestSavedRefinance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'N/A'}</li>
+              </ul>
+            </div>
           )}
         </div>
       )}
